@@ -2,7 +2,7 @@
 Enhanced WebSocket server with real-time streaming:
 - Streaming STT (faster-whisper with sliding window)
 - Streaming LLM (Ollama - already streaming)
-- Streaming TTS (sentence-by-sentence)
+- Streaming TTS (sentence-by-sentence) - now with Chatterbox support!
 - Barge-in support
 """
 import argparse
@@ -47,6 +47,13 @@ class StreamingVoiceAgent:
         lang: Optional[str] = "en",
         tts_backend: str = "coqui",
         tts_model: str = "tts_models/en/vctk/vits",
+        # Chatterbox-specific parameters
+        chatterbox_multilingual: bool = False,
+        chatterbox_speaker_wav: Optional[str] = None,
+        chatterbox_device: Optional[str] = None,
+        chatterbox_exaggeration: float = 0.5,
+        chatterbox_cfg: float = 0.5,
+        # Ollama parameters
         ollama_model: str = "llama3.1:8b-instruct-q4_K_M",
         ollama_base: str = "http://localhost:11434",
     ):
@@ -59,12 +66,26 @@ class StreamingVoiceAgent:
             device=whisper_device,
             compute_type=compute_type,
             language=lang,
-            window_duration=1.0,  # 3s windows
-            hop_duration=.5      # Process every 2s
+            window_duration=1.0,  # 1s windows
+            hop_duration=.5      # Process every 0.5s
         )
 
-        db_print(f"[init] Loading streaming TTS: {tts_model}")
-        self.tts = StreamingTTS(tts_backend=tts_backend, model_name=tts_model)
+        db_print(f"[init] Loading streaming TTS backend: {tts_backend}")
+        if tts_backend == "chatterbox":
+            db_print(f"[init] Chatterbox config: multilingual={chatterbox_multilingual}, speaker_wav={chatterbox_speaker_wav}")
+        else:
+            db_print(f"[init] TTS model: {tts_model}")
+        
+        self.tts = StreamingTTS(
+            tts_backend=tts_backend, 
+            model_name=tts_model,
+            # Chatterbox-specific parameters
+            chatterbox_multilingual=chatterbox_multilingual,
+            chatterbox_speaker_wav=chatterbox_speaker_wav,
+            chatterbox_device=chatterbox_device,
+            chatterbox_exaggeration=chatterbox_exaggeration,
+            chatterbox_cfg=chatterbox_cfg,
+        )
 
         db_print("[init] Streaming agent ready")
 
@@ -123,6 +144,7 @@ class StreamingWebSocketHandler:
         )
 
         try:
+            # Send ready message with both sample rates
             await websocket.send(json.dumps({
                 "type": "ready",
                 "message": "Streaming voice agent ready",
@@ -309,7 +331,7 @@ class StreamingWebSocketHandler:
             await websocket.send(json.dumps({"type": "status", "status": "synthesizing"}))
 
             async for chunk in self.agent.tts.stream_from_llm(llm_stream):
-                # Send tts_start on first chunk
+                # Send tts_start on first chunk with sample rate info
                 if not tts_started:
                     await websocket.send(json.dumps({
                         "type": "tts_start",
@@ -375,10 +397,23 @@ class StreamingWebSocketHandler:
 
         await websocket.send(json.dumps({"type": "status", "status": "processing"}))
 
+        # Get the TTS sample rate for this response
+        tts_sample_rate = self.agent.tts.get_sample_rate()
+        tts_started = False
+
         # Stream response
         async for chunk in self.agent.tts.stream_from_llm(
             self.agent.query_ollama_stream(text)
         ):
+            # Send tts_start on first chunk
+            if not tts_started:
+                await websocket.send(json.dumps({
+                    "type": "tts_start",
+                    "sample_rate": tts_sample_rate,
+                    "dtype": "float32"
+                }))
+                tts_started = True
+            
             audio_b64 = base64.b64encode(chunk['audio'].tobytes()).decode('utf-8')
 
             await websocket.send(json.dumps({
@@ -387,6 +422,10 @@ class StreamingWebSocketHandler:
                 "sample_rate": chunk['sample_rate'],
                 "dtype": "float32"
             }))
+        
+        # Send tts_end
+        if tts_started:
+            await websocket.send(json.dumps({"type": "tts_end"}))
 
         await websocket.send(json.dumps({"type": "status", "status": "complete"}))
 
@@ -403,21 +442,44 @@ async def main_server(host: str, port: int, agent: StreamingVoiceAgent, sample_r
 
 
 def main():
-    p = argparse.ArgumentParser(description="Streaming voice agent with faster-whisper + Ollama + TTS")
+    p = argparse.ArgumentParser(description="Streaming voice agent with faster-whisper + Ollama + TTS (Coqui/Chatterbox)")
     p.add_argument('--host', default='0.0.0.0', help='WebSocket server host')
     p.add_argument('--port', type=int, default=9095, help='WebSocket server port (default: 9095)')
+    
+    # Ollama settings
     p.add_argument('--ollama-base', default='http://localhost:11434')
     p.add_argument('--ollama-model', default='llama3.1:8b-instruct-q4_K_M')
+    
+    # Whisper settings
     p.add_argument('--whisper-model', default='large-v3-turbo', help='Whisper model (large-v3, distil-large-v3, etc.)')
     p.add_argument('--whisper-device', default='cuda', choices=['cpu', 'cuda'])
     p.add_argument('--compute-type', default='float16', help='int8 (CPU), float16 (GPU)')
     p.add_argument('--lang', default='en', help='Language (en, es, fr, etc.)')
-    p.add_argument('--tts-backend', default='coqui', choices=['coqui', 'piper'])
-    p.add_argument('--tts-model', default='tts_models/en/vctk/vits')
-    p.add_argument('--sample-rate', type=int, default=16000, help='Audio sample rate')
+    
+    # TTS backend selection
+    p.add_argument('--tts-backend', default='coqui', choices=['coqui', 'piper', 'chatterbox'],
+                   help='TTS backend: coqui (default), piper, or chatterbox')
+    p.add_argument('--tts-model', default='tts_models/en/vctk/vits',
+                   help='TTS model for Coqui/Piper backends')
+    
+    # Chatterbox-specific options
+    p.add_argument('--chatterbox-multilingual', action='store_true',
+                   help='Use Chatterbox multilingual model (supports 23 languages)')
+    p.add_argument('--chatterbox-speaker-wav', default=None,
+                   help='Path to reference audio for Chatterbox voice cloning')
+    p.add_argument('--chatterbox-device', default=None, choices=['cpu', 'cuda', 'mps'],
+                   help='Device for Chatterbox (auto-detect if not specified)')
+    p.add_argument('--chatterbox-exaggeration', type=float, default=0.5,
+                   help='Emotion intensity for Chatterbox (0.0-1.0)')
+    p.add_argument('--chatterbox-cfg', type=float, default=0.5,
+                   help='CFG/pace control for Chatterbox (0.0-1.0)')
+    
+    # Audio settings
+    p.add_argument('--sample-rate', type=int, default=16000, help='Input audio sample rate for STT')
+    
     args = p.parse_args()
 
-    # Initialize agent
+    # Initialize agent with all settings
     agent = StreamingVoiceAgent(
         whisper_model=args.whisper_model,
         whisper_device=args.whisper_device,
@@ -425,6 +487,13 @@ def main():
         lang=args.lang,
         tts_backend=args.tts_backend,
         tts_model=args.tts_model,
+        # Chatterbox-specific parameters
+        chatterbox_multilingual=args.chatterbox_multilingual,
+        chatterbox_speaker_wav=args.chatterbox_speaker_wav,
+        chatterbox_device=args.chatterbox_device,
+        chatterbox_exaggeration=args.chatterbox_exaggeration,
+        chatterbox_cfg=args.chatterbox_cfg,
+        # Ollama parameters
         ollama_model=args.ollama_model,
         ollama_base=args.ollama_base
     )

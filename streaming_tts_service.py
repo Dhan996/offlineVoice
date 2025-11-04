@@ -1,6 +1,6 @@
 """
 Streaming TTS using sentence-by-sentence synthesis
-Works with both Piper (fast) and Coqui TTS (existing)
+Works with Piper (fast), Coqui TTS, and Chatterbox (voice cloning)
 """
 import re
 import numpy as np
@@ -16,11 +16,26 @@ class StreamingTTS:
     as soon as each sentence is complete.
     """
 
-    def __init__(self, tts_backend="coqui", model_name: str = "tts_models/en/vctk/vits"):
+    def __init__(
+        self, 
+        tts_backend="coqui", 
+        model_name: str = "tts_models/en/vctk/vits",
+        # Chatterbox-specific parameters
+        chatterbox_multilingual: bool = False,
+        chatterbox_speaker_wav: Optional[str] = None,
+        chatterbox_device: Optional[str] = None,
+        chatterbox_exaggeration: float = 0.5,
+        chatterbox_cfg: float = 0.5,
+    ):
         """
         Args:
-            tts_backend: "coqui" or "piper"
-            model_name: Model name for chosen backend
+            tts_backend: "coqui", "piper", or "chatterbox"
+            model_name: Model name for Coqui/Piper backends
+            chatterbox_multilingual: Use multilingual Chatterbox model
+            chatterbox_speaker_wav: Path to reference audio for voice cloning
+            chatterbox_device: Device for Chatterbox ('cuda', 'cpu', or None for auto)
+            chatterbox_exaggeration: Emotion intensity for Chatterbox
+            chatterbox_cfg: CFG/pace control for Chatterbox
         """
         self.backend = tts_backend
         self.sentence_buffer = ""
@@ -32,7 +47,7 @@ class StreamingTTS:
 
         elif tts_backend == "piper":
             try:
-                import piper
+                # import piper
                 print(f"[StreamingTTS] Using Piper TTS: {model_name}")
                 # Piper setup (you'll need to adjust based on piper API)
                 self.tts_engine = self._init_piper(model_name)
@@ -41,8 +56,38 @@ class StreamingTTS:
                 from tts_coqui_service import CoquiTTS
                 self.tts_engine = CoquiTTS(model_name="tts_models/en/vctk/vits")
                 self.backend = "coqui"
+        
+        elif tts_backend == "chatterbox":
+            try:
+                from tts_chatterbox_service import ChatterboxTTS
+                print(f"[StreamingTTS] Using Chatterbox TTS")
+                print(f"[StreamingTTS] Multilingual: {chatterbox_multilingual}")
+                if chatterbox_speaker_wav:
+                    print(f"[StreamingTTS] Voice cloning: {chatterbox_speaker_wav}")
+                
+                self.tts_engine = ChatterboxTTS(
+                    multilingual=chatterbox_multilingual,
+                    speaker_wav=chatterbox_speaker_wav,
+                    device=chatterbox_device,
+                    exaggeration=chatterbox_exaggeration,
+                    cfg=chatterbox_cfg,
+                    use_gpu=True if chatterbox_device != 'cpu' else (chatterbox_device is None),
+                )
+                self.backend = "chatterbox"
+                
+            except ImportError as e:
+                print(f"[StreamingTTS] Chatterbox not installed: {e}")
+                print("[StreamingTTS] Install with: pip install chatterbox-tts")
+                print("[StreamingTTS] Falling back to Coqui")
+                from tts_coqui_service import CoquiTTS
+                self.tts_engine = CoquiTTS(model_name="tts_models/en/vctk/vits")
+                self.backend = "coqui"
+        
+        else:
+            raise ValueError(f"Unknown TTS backend: {tts_backend}")
 
-        print("[StreamingTTS] Streaming TTS initialized")
+        print(f"[StreamingTTS] Streaming TTS initialized with {self.backend}")
+        print(f"[StreamingTTS] Output sample rate: {self.get_sample_rate()}Hz")
 
     def _init_piper(self, model_name):
         """Initialize Piper TTS (placeholder - adjust based on your setup)"""
@@ -56,7 +101,8 @@ class StreamingTTS:
         if not text_chunk or not text_chunk.strip():
             return np.zeros((0,), dtype=np.float32)
 
-        if self.backend == "coqui":
+        if self.backend in ["coqui", "chatterbox"]:
+            # Both Coqui and Chatterbox use the same synth() interface
             return self.tts_engine.synth(text_chunk)
         elif self.backend == "piper":
             # TODO: Implement Piper synthesis
@@ -64,7 +110,7 @@ class StreamingTTS:
 
     def get_sample_rate(self) -> int:
         """Get TTS output sample rate"""
-        if self.backend == "coqui":
+        if self.backend in ["coqui", "chatterbox"]:
             return self.tts_engine.out_rate
         elif self.backend == "piper":
             return 22050  # Piper default
@@ -178,13 +224,24 @@ class StreamingTTS:
 # Example usage
 if __name__ == "__main__":
     # Test with complete text
-    tts = StreamingTTS(tts_backend="coqui")
+    # Test Chatterbox if available
+    try:
+        tts = StreamingTTS(tts_backend="chatterbox")
+        test_text = "Hello! This is a test of Chatterbox streaming TTS. It should synthesize sentence by sentence. Much faster than waiting for the whole response."
+        
+        print("\n=== Testing Chatterbox Streaming ===\n")
+        for chunk in tts.stream_from_text(test_text):
+            print(f"Audio chunk: {chunk['audio'].shape[0]} samples @ {chunk['sample_rate']}Hz, '{chunk['text'][:30]}...'")
+    except Exception as e:
+        print(f"Chatterbox test failed: {e}")
+        print("\nFalling back to Coqui test...")
+        
+        tts = StreamingTTS(tts_backend="coqui")
+        test_text = "Hello! This is a test of streaming TTS. It should synthesize sentence by sentence. Much faster than waiting for the whole response."
 
-    test_text = "Hello! This is a test of streaming TTS. It should synthesize sentence by sentence. Much faster than waiting for the whole response."
-
-    print("\n=== Streaming from complete text ===\n")
-    for chunk in tts.stream_from_text(test_text):
-        print(f"Audio chunk: {chunk['audio'].shape[0]} samples, '{chunk['text'][:30]}...'")
+        print("\n=== Streaming from complete text ===\n")
+        for chunk in tts.stream_from_text(test_text):
+            print(f"Audio chunk: {chunk['audio'].shape[0]} samples, '{chunk['text'][:30]}...'")
 
     print("\n=== Simulating LLM stream ===\n")
 
