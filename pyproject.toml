@@ -1,19 +1,11 @@
 [project]
-name = "offline-mode-03112025"
+name = "offlineVoice"
 version = "0.1.0"
-description = "TTS offline mode"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.12"  # Lock to Python 3.11 only
 dependencies = [
-    "faster-whisper>=1.2.1",
-    "scipy>=1.16.3",
-    "sounddevice>=0.5.3",
-    "soundfile>=0.13.1",
-    "torch>=2.9.0",
-    "torchaudio>=2.9.0",
-    "torchcodec>=0.8.1",
-    "tts>=0.22.0",
+    "chatterbox-tts==0.1.4",  # This will pull torch==2.6.0
+    "faster-whisper>=1.0.0",
+    "sounddevice>=0.5.0",
+    "numpy>=1.24.0,<1.26.0",  # Match chatterbox requirements
+    # Don't specify torch/torchaudio here - let chatterbox-tts control the versions
 ]
-
-[tool.uv]
-# Tell uv that pkuseg needs numpy to build
-extra-build-dependencies = { pkuseg = ["numpy"] }
