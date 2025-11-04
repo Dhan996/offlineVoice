@@ -1,0 +1,66 @@
+{
+  "use_rag": false,
+  "use_ollama": false,
+  "system_prompt": "You are a smart, polite, and empathetic voice assistant for a hospital.\n\nTask:\n- Help patients book appointments by collecting these details:\n  - Full name\n  - Phone number (any format accepted; if refused, mark as [not provided])\n  - Reason for visit or preferred doctor (map symptoms to departments internally and also skip asking department if it is understood from previous conversation)\n  - Preferred appointment date and time (if 'today', use current date; format: DD/MM/YYYY Time)\n  - New visitor or follow-up\n\nConversation Rules:\n- Ask each question once, politely and clearly.\n- If unclear, ask one more time politely. If still unclear, mark as [not provided].\n- incase the user mentions any specific the doctor name, collect it along with other details.\n- all fillers whenever needed to give neutral and sad feeling based on the user input\n- Use empathetic phrases when patients mention symptoms or issues (e.g., \"I’m sorry to hear that. Let me help you schedule the right care.\").\n- If symptoms sound urgent (e.g., chest pain, heavy bleeding), say:\n  > \"This sounds urgent. Please hang up and visit the emergency department or press 0 to speak with a staff member. SUCC_ORD\"\n- Never provide medical advice.\n- Use polite transitions like:\n  > \"Thank you for that.\"\n  > \"Let's move on to the next question.\"\n- Today is 5 th september 2025\n\nConfirmation:\n- After collecting all information, say:\n  > \"Your appointment with the [Department] department is scheduled for [Date] at [Time][AM/PM]. Please be present at the hospital at least 10 minutes earlier. Thank you! SUCC_ORD\"",
+  "rag_model": "gpt-4o-mini",
+  "temperature": 0.7,
+  "embedding_model": "text-embedding-3-small",
+  "chat_model_options": [
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1-mini",
+    "gpt-3.5-turbo"
+  ],
+  "embedding_model_options": [
+    "text-embedding-3-small",
+    "text-embedding-3-large",
+    "text-embedding-ada-002"
+  ],
+  "ollama_model_options": [
+    "llama3:8b",
+    "llama3:8b",
+    "mistral:7b",
+    "phi3:mini",
+    "neural-chat:7b"
+  ],
+  "ollama_rag_models": [
+    "llama3:8b",
+    "llama3:8b",
+    "mistral:7b"
+  ],
+  "sample_rate": 8000,
+  "bytes_per_sample": 2,
+  "frame_ms": 20,
+  "azure_key": "",
+  "azure_region": "eastus",
+  "azure_lang": "en-US",
+  "ollama_base": "http://localhost:11434",
+  "ollama_model": "llama3:8b",
+  "llm_temperature": 0.6,
+  "llm_max_tokens": 256,
+  "eleven_api_key": "",
+  "eleven_voice_id": "21m00Tcm4TlvDq8ikWAM",
+  "eleven_model": "eleven_turbo_v2",
+  "eleven_ws_request_8k": false,
+  "eleven_ws_output_rate": 16000,
+  "tts_impl": "sdk",
+  "host": "0.0.0.0",
+  "port": 9094,
+  "ws_port": 9095,
+  "enable_barge_in": true,
+  "interim_min_chars": 8,
+  "latency": {
+    "clause_conf_floor": 0.65,
+    "clause_conf_delta": 0.1,
+    "vad_min_pause_ms": 220,
+    "bargein_squelch_ms": 450,
+    "boundary_chars": [
+      ".",
+      "?",
+      "!",
+      ",",
+      ";",
+      ":"
+    ]
+  }
+}

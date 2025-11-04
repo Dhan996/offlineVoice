@@ -1,0 +1,75 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model files and data
+*.pth
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+*.h5
+*.onnx
+
+# Audio files (comment out if you want to include test audio)
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+
+# Logs and temp files
+*.log
+logs/
+temp/
+tmp/
+
+# Test outputs
+output/
+outputs/
+cloned_audio/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PyTorch
+*.pth.tar
+
+# Config (if it contains secrets)
+# config.py
+
+# Documentation builds
+docs/_build/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json

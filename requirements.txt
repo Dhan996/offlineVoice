@@ -1,0 +1,13 @@
+chatterbox-tts
+faster_whisper
+httpx==0.28.1
+numpy
+piper==0.14.5
+scipy
+sounddevice==0.5.3
+soundfile==0.13.1
+torch
+torchaudio
+TTS
+webrtcvad==2.0.10
+websockets==15.0.1ß
